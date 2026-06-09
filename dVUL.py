@@ -7,8 +7,10 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, quote, unquo
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright
 import payloads.xss as xss_payloads
+import things.tolStp as ssti
+import things.colorians as col
 
-vers = "0.0.2#stable"
+vers = "0.0.3#alpha"
 session = requests.Session()
 
 
@@ -16,21 +18,10 @@ def ayo(symbol, message):
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
     date_str = now.strftime("%Y-%m-%d")
-    print(f"[{symbol}] {message} @ {time_str} /{date_str}/")
-
-
-def scanSSTI():
-    ayo("*", "Memulai scan SSTI...")
-    print()
-    print("[!] Fungsi scan belum diimplementasi.")
-    print()
-
+    sym = col.get_symbol(symbol)
+    print(f"[{sym}] {message} @ {time_str} /{date_str}/")
 
 def test_payload_with_browser(url):
-    """
-    Buka URL di headless Chromium via Playwright.
-    Return True kalau alert/confirm/prompt ke-trigger (XSS executed).
-    """
     alert_triggered = False
     try:
         with sync_playwright() as p:
@@ -44,7 +35,7 @@ def test_payload_with_browser(url):
 
             page.on("dialog", handle_dialog)
             page.goto(url, timeout=7000)
-            page.wait_for_timeout(1500)  # tunggu JS execute
+            page.wait_for_timeout(1500)
             browser.close()
     except Exception:
         pass
@@ -60,7 +51,6 @@ def test_payload(parsed, param, params, payload):
     try:
         response = session.get(test_url, timeout=5)
         if payload in response.text or unquote(payload) in response.text:
-            # Payload reflected — cek apakah beneran di-execute
             executed = test_payload_with_browser(test_url)
             if executed:
                 return ("executed", param, payload)
@@ -135,17 +125,13 @@ def scanXSS(url, scan_type="all", threads=10):
                     print()
                     vulnerable_reflected.append((p, payload_or_err))
 
-                # elif result is False:
-                #     ayo("-", f"[{p}] Not vulnerable: {payload_or_err[:40]}...")
-
-                elif result is None:
-                    ayo("!", f"Error on [{p}]: {payload_or_err}")
+                # elif result is None:
+                #     ayo("!", f"Error on [{p}]: {payload_or_err}")
 
     print()
-    print("--- github@0whynaru ---")
+    print("------ github@0whynaru ------")
     print()
 
-    # Summary
     if vulnerable_executed:
         ayo("VULN", f"{len(vulnerable_executed)} parameter EXECUTED (XSS confirmed):")
         print()
@@ -168,7 +154,7 @@ def scanXSS(url, scan_type="all", threads=10):
 def title():
     print(r"""
      ___   ___   _ _    
-  __| \ \ / / | | | |  {0.0.2#stable}
+  __| \ \ / / | | | |  {0.0.3#alpha}
  / _` |\ V /| |_| | | 
  \__,_| \_/  \___/| |__
             > ... |____|
@@ -176,31 +162,47 @@ def title():
 
 
 def ver():
-    print()
     print("version:", vers)
     print()
 
 
 def help():
     print("""
-Usage: python main.py [options] [target]
+Usage: dvul [options] [target]
 
  Options:
   -h, --help            Show help message
+  -sh, --shelp          Show scan help message
   -v, --version         Show version
 
   Scan:
-    -s, --scan  <url>           Scan XSS on target URL
+    -sx, --scanx  <url>         Scan XSS on target URL
     --type      <type>          Payload type (default: all)
                                 reflected, stored, dom, bypass,
                                 filtered, dombased, polyglot,
                                 blind, all
     --threads   <number>        Number of threads (default: 10)
+    -st, --scanti <url>         Scan SSTI on target URL
+    --engine    <engine>        Template engine (default: all)
+                                jinja2, twig, freemarker, smarty,
+                                mako, erb, velocity, thymeleaf,
+                                tornado, nunjucks, polyglot, all
+    -sq, --scansql              Scan SQL Injection on targets (coming soon)
+""")
 
- Usage:
-    python dVUL -s "http://target.com/page?id=1"
-    python dVUL -s "http://target.com/page?id=1" --type reflected
-    python dVUL -s "http://target.com/page?id=1" --threads 20
+
+def shelp():
+    print("""
+    SSTI Scanner - Server-Side Template Injection
+     Usage:
+        dvul -st "http://target.com/page?id=1"
+        dvul -st "http://target.com/page?id=1" --engine jinja2
+
+    XSS Scanner  - Cross-Site Scripting
+     Usage:
+        dvul -sx "http://target.com/page?id=1"
+        dvul -sx "http://target.com/page?id=1" --type reflected
+        dvul -sx "http://target.com/page?id=1" --threads 20
 """)
 
 
@@ -226,17 +228,20 @@ if argument in ('-h', '--help'):
     time.sleep(0.3)
     help()
 
+elif argument in ('-sh', '--shelp'):
+    shelp()
+
 elif argument in ('-t', '--title'):
     title()
 
 elif argument in ('-v', '--version'):
     ver()
 
-elif argument in ('-s', '--scan'):
+elif argument in ('-sx', '--scanx'):
     if len(arguments) < 2:
         print()
         print("ERROR: Invalid target URL.")
-        print("Make sure your command is correct: python main.py -s 'http://target.com/page?id=1'")
+        print("Make sure your command is correct: dvul -sx 'http://target.com/page?id=1'")
         print()
         sys.exit(1)
 
@@ -261,6 +266,36 @@ elif argument in ('-s', '--scan'):
     time.sleep(0.3)
     disclaimer()
     scanXSS(target_url, scan_type, threads)
+
+elif argument in ('-st', '--scanti'):
+    if len(arguments) < 2:
+        print()
+        print("ERROR: Invalid target URL.")
+        print("Make sure your command is correct: dvul -st 'http://target.com/page?id=1'")
+        print()
+        sys.exit(1)
+
+    target_url = arguments[1]
+
+    engine = "all"
+    if "--engine" in arguments:
+        engine_index = arguments.index("--engine")
+        if engine_index + 1 < len(arguments):
+            engine = arguments[engine_index + 1]
+
+    threads = 10
+    if "--threads" in arguments:
+        thread_index = arguments.index("--threads")
+        if thread_index + 1 < len(arguments):
+            try:
+                threads = int(arguments[thread_index + 1])
+            except ValueError:
+                ayo("!", "Invalid thread count, using default: 10")
+
+    title()
+    time.sleep(0.3)
+    disclaimer()
+    ssti.scanSSTI(target_url, engine, threads)
 
 else:
     title()
