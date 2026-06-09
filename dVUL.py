@@ -1,11 +1,15 @@
+#!/usr/bin/env python3
 import sys
 import time
 import requests
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, quote, unquote
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from playwright.sync_api import sync_playwright
 import payloads.xss as xss_payloads
 
-vers = "0.0.1#stable"
+vers = "0.0.2#stable"
+session = requests.Session()
 
 
 def ayo(symbol, message):
@@ -22,7 +26,53 @@ def scanSSTI():
     print()
 
 
-def scanXSS(url, scan_type="all"):
+def test_payload_with_browser(url):
+    """
+    Buka URL di headless Chromium via Playwright.
+    Return True kalau alert/confirm/prompt ke-trigger (XSS executed).
+    """
+    alert_triggered = False
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            def handle_dialog(dialog):
+                nonlocal alert_triggered
+                alert_triggered = True
+                dialog.dismiss()
+
+            page.on("dialog", handle_dialog)
+            page.goto(url, timeout=7000)
+            page.wait_for_timeout(1500)  # tunggu JS execute
+            browser.close()
+    except Exception:
+        pass
+    return alert_triggered
+
+
+def test_payload(parsed, param, params, payload):
+    test_params = params.copy()
+    test_params[param] = payload
+    new_query = urlencode(test_params, doseq=True, quote_via=quote)
+    test_url = urlunparse(parsed._replace(query=new_query))
+
+    try:
+        response = session.get(test_url, timeout=5)
+        if payload in response.text or unquote(payload) in response.text:
+            # Payload reflected — cek apakah beneran di-execute
+            executed = test_payload_with_browser(test_url)
+            if executed:
+                return ("executed", param, payload)
+            else:
+                return ("reflected", param, payload)
+        else:
+            return (False, param, payload)
+    except requests.RequestException as e:
+        return (None, param, str(e))
+
+
+def scanXSS(url, scan_type="all", threads=10):
     print()
     ayo("*", f"Starting scanning: {url}")
     print()
@@ -37,7 +87,7 @@ def scanXSS(url, scan_type="all"):
             print()
             return
 
-    ayo("*", f"Type: {scan_type} [!] Payloads: {len(payloads)}")
+    ayo("*", f"Type: {scan_type} | Payloads: {len(payloads)} | Threads: {threads}")
     print()
 
     parsed = urlparse(url)
@@ -50,37 +100,67 @@ def scanXSS(url, scan_type="all"):
 
     ayo("+", f"Parameter found: {', '.join(params.keys())}")
     print()
-    vulnerable = []
+
+    vulnerable_executed = []
+    vulnerable_reflected = []
 
     for param in params:
-        for payload in payloads:
-            test_params = params.copy()
-            test_params[param] = payload
-            new_query = urlencode(test_params, doseq=True)
-            test_url = urlunparse(parsed._replace(query=new_query))
-
-            try:
-                response = requests.get(test_url, timeout=5)
-                if payload in response.text:
-                    ayo("VULN", f"Parameter '{param}' VULNERABLE! Payload: {payload}")
-                    print()
-                    vulnerable.append((param, payload))
-                    break
-                else:
-                    ayo("-", f"[{param}] Not vulnerable: {payload[:40]}...")
-            except requests.RequestException as e:
-                ayo("!", f"Error: {e}")
-
-    print()
-    print("--- github@0owhynaru ---")
-    print()
-    if vulnerable:
-        ayo("VULN", f"{len(vulnerable)} parameter vulnerable:")
+        ayo("*", f"Testing parameter: {param}")
         print()
-        for param, payload in vulnerable:
-            print(f"  {param} => {payload}")
-            print()
-    else:
+
+        print(f'[+] Scanning ({len(payloads)} payloads)')
+        print()
+
+        found = False
+        futures = {}
+
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            for payload in payloads:
+                if found:
+                    break
+                future = executor.submit(test_payload, parsed, param, params, payload)
+                futures[future] = payload
+
+            for future in as_completed(futures):
+                result, p, payload_or_err = future.result()
+
+                if result == "executed":
+                    ayo("*", f"[EXE] Parameter '{p}' - Alert triggered! Payload: {payload_or_err}")
+                    print()
+                    vulnerable_executed.append((p, payload_or_err))
+                    found = True
+
+                elif result == "reflected":
+                    ayo("!", f"[REF] Parameter '{p}' - Payload reflected but not executed: {payload_or_err}")
+                    print()
+                    vulnerable_reflected.append((p, payload_or_err))
+
+                # elif result is False:
+                #     ayo("-", f"[{p}] Not vulnerable: {payload_or_err[:40]}...")
+
+                elif result is None:
+                    ayo("!", f"Error on [{p}]: {payload_or_err}")
+
+    print()
+    print("--- github@0whynaru ---")
+    print()
+
+    # Summary
+    if vulnerable_executed:
+        ayo("VULN", f"{len(vulnerable_executed)} parameter EXECUTED (XSS confirmed):")
+        print()
+        for p, payload in vulnerable_executed:
+            print(f"  [EXECUTED] {p} => {payload}")
+        print()
+
+    if vulnerable_reflected:
+        ayo("WARN", f"{len(vulnerable_reflected)} parameter REFLECTED (not executed):")
+        print()
+        for p, payload in vulnerable_reflected:
+            print(f"  [REFLECTED] {p} => {payload}")
+        print()
+
+    if not vulnerable_executed and not vulnerable_reflected:
         ayo("+", "There is no XSS found!")
         print()
 
@@ -88,7 +168,7 @@ def scanXSS(url, scan_type="all"):
 def title():
     print(r"""
      ___   ___   _ _    
-  __| \ \ / / | | | |  {0.0.1#stable}
+  __| \ \ / / | | | |  {0.0.2#stable}
  / _` |\ V /| |_| | | 
  \__,_| \_/  \___/| |__
             > ... |____|
@@ -103,7 +183,6 @@ def ver():
 
 def help():
     print("""
-          
 Usage: python main.py [options] [target]
 
  Options:
@@ -111,19 +190,20 @@ Usage: python main.py [options] [target]
   -v, --version         Show version
 
   Scan:
-    -sh, --shelp                give how to use.
     -s, --scan  <url>           Scan XSS on target URL
     --type      <type>          Payload type (default: all)
                                 reflected, stored, dom, bypass,
-                                filtered, dombased, polyglot, all
+                                filtered, dombased, polyglot,
+                                blind, all
+    --threads   <number>        Number of threads (default: 10)
+
+ Usage:
+    python dVUL -s "http://target.com/page?id=1"
+    python dVUL -s "http://target.com/page?id=1" --type reflected
+    python dVUL -s "http://target.com/page?id=1" --threads 20
 """)
 
-def shelp():
-     print("""
-     Usage:
-    python dVUL -s "http://localhost/page?id=1"
-    python dVUL -s "http://localhost/page?id=1" --type reflected
-    python dVUL -s "http://localhost/page?id=1" --type bypass""")
+
 def disclaimer():
     print()
     print("[!] legal disclaimer: Usage of dVUL for attacking targets without prior mutual consent is illegal. "
@@ -152,18 +232,14 @@ elif argument in ('-t', '--title'):
 elif argument in ('-v', '--version'):
     ver()
 
-elif argument in ('--shelp', '-sh'):
-    shelp()
-
-# XSS NYA COKKKK
-elif argument in ('-sx', '--scanx'):
+elif argument in ('-s', '--scan'):
     if len(arguments) < 2:
         print()
         print("ERROR: Invalid target URL.")
-        print("Make sure your command is correct: python main.py -s 'http://localhost/page?id=1'")
+        print("Make sure your command is correct: python main.py -s 'http://target.com/page?id=1'")
         print()
         sys.exit(1)
-# XSS NYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
     target_url = arguments[1]
 
     scan_type = "all"
@@ -172,13 +248,19 @@ elif argument in ('-sx', '--scanx'):
         if type_index + 1 < len(arguments):
             scan_type = arguments[type_index + 1]
 
+    threads = 10
+    if "--threads" in arguments:
+        thread_index = arguments.index("--threads")
+        if thread_index + 1 < len(arguments):
+            try:
+                threads = int(arguments[thread_index + 1])
+            except ValueError:
+                ayo("!", "Invalid thread count, using default: 10")
+
     title()
     time.sleep(0.3)
     disclaimer()
-    scanXSS(target_url, scan_type)
-# INI SSTIIIIIII
-elif argument in ('--scans', '-ss'):
-    print('commming')
+    scanXSS(target_url, scan_type, threads)
 
 else:
     title()
