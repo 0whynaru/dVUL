@@ -6,9 +6,7 @@ fi
 echo ""
 echo "[+] Installing dVUL..."
 echo ""
-sleep(1)
 echo "Checking installation (playwright, chromium)"
-sleep(1)
 pip install requests playwright --break-system-packages
 python3 -m playwright install chromium
 chmod +x "$(pwd)/dVUL.py"
