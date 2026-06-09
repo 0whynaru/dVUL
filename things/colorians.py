@@ -57,4 +57,4 @@ SYMBOLS = {
 
 
 def get_symbol(symbol):
-    return SYMBOLS.get(symbol, colorize(f"[{symbol}]", WHITE))
+    return SYMBOLS.get(symbol, colorize(f"{symbol}", WHITE))
