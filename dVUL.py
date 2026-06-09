@@ -19,7 +19,7 @@ def ayo(symbol, message):
     time_str = now.strftime("%H:%M:%S")
     date_str = now.strftime("%Y-%m-%d")
     sym = col.get_symbol(symbol)
-    print(f"[{sym}] {message} @ {time_str} /{date_str}/")
+    print(f"{sym} {message} @ {time_str} /{date_str}/")
 
 def test_payload_with_browser(url):
     alert_triggered = False
