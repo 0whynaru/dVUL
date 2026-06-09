@@ -100,19 +100,19 @@ def scanXSS(url, scan_type="all", threads=10):
 
         print(f'[+] Scanning ({len(payloads)} payloads)')
         print()
-
         found = False
         futures = {}
 
         with ThreadPoolExecutor(max_workers=threads) as executor:
             for payload in payloads:
-                if found:
-                    break
                 future = executor.submit(test_payload, parsed, param, params, payload)
-                futures[future] = payload
+                futures[future] = payload  # submit semua dulu
 
-            for future in as_completed(futures):
+            for future in as_completed(futures):  # baru proses hasilnya
                 result, p, payload_or_err = future.result()
+                found = False
+                futures = {}
+
 
                 if result == "executed":
                     ayo("*", f"[EXE] Parameter '{p}' - Alert triggered! Payload: {payload_or_err}")
