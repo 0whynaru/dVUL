@@ -106,22 +106,22 @@ def scanXSS(url, scan_type="all", threads=10):
         with ThreadPoolExecutor(max_workers=threads) as executor:
             for payload in payloads:
                 future = executor.submit(test_payload, parsed, param, params, payload)
-                futures[future] = payload  # submit semua dulu
+                futures[future] = payload 
 
-            for future in as_completed(futures):  # baru proses hasilnya
+            for future in as_completed(futures):
                 result, p, payload_or_err = future.result()
                 found = False
                 futures = {}
 
 
                 if result == "executed":
-                    ayo("*", f"[EXE] Parameter '{p}' - Alert triggered! Payload: {payload_or_err}")
+                    ayo("*", f"[EXE] Alert triggered! Payload: {payload_or_err}")
                     print()
                     vulnerable_executed.append((p, payload_or_err))
                     found = True
 
                 elif result == "reflected":
-                    ayo("!", f"[REF] Parameter '{p}' - Payload reflected but not executed: {payload_or_err}")
+                    ayo("!", f"[REF] Payload reflected but not executed: {payload_or_err}")
                     print()
                     vulnerable_reflected.append((p, payload_or_err))
 
@@ -147,14 +147,17 @@ def scanXSS(url, scan_type="all", threads=10):
         print()
 
     if not vulnerable_executed and not vulnerable_reflected:
-        ayo("+", "There is no XSS found!")
+        ayo("+", "There is no XSS found! nice try diddy:)")
         print()
 
-
+def whatNew():
+    print("""
+a
+""")
 def title():
     print(r"""
      ___   ___   _ _    
-  __| \ \ / / | | | |  {0.0.3#alpha}
+  __| \ \ / / | | | |  {0.0.3#beta}
  / _` |\ V /| |_| | | 
  \__,_| \_/  \___/| |__
             > ... |____|
