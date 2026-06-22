@@ -42,15 +42,15 @@ def colorize(text, color):
 #   [!]       → bold yellow (warning)
 
 SYMBOLS = {
-    "*":    colorize("[*]", B_BLUE),
-    "+":    colorize("[+]", B_GREEN),
-    "-":    colorize("[-]", GREY),
-    "!":    colorize("[!]", B_YELLOW),
+    "*":    colorize("*", B_BLUE),
+    "+":    colorize("+", B_GREEN),
+    "-":    colorize("-", GREY),
+    "!":    colorize("!", B_YELLOW),
     "VULN": colorize("[VULN]", B_RED),
     "WARN": colorize("[WARN]", B_YELLOW),
-    "INFO": colorize("[INFO]", B_WHITE),
-    "EXE":  colorize("[EXE]", B_RED),
-    "REF":  colorize("[REF]", B_MAGENTA),
+    "INFO": colorize("INFO", B_GREEN),
+    "EXE":  colorize("EXE", B_RED),
+    "REF":  colorize("REF", B_MAGENTA),
     "SSTI": colorize("[SSTI]", B_RED),
     "ERR":  colorize("[ERR]", RED),
 }

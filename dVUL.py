@@ -1,18 +1,59 @@
-#!/usr/bin/env python3
-import sys
 import time
+import sys
+import argparse
 import requests
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, quote, unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 from playwright.sync_api import sync_playwright
 import payloads.xss as xss_payloads
 import things.tolStp as ssti
 import things.colorians as col
 
-vers = "0.0.3#alpha"
+# ANSI colors
+BOLDSA      = "\033[1m"
+
+YELLOWSA    = "\033[33m"
+B_YELLOWSA  = BOLDSA + YELLOWSA
+B_YELLOWSAA = "\033[41m"
+RESETSA     = "\033[0m"
+CYANSA      = "\033[36m"
+GREYSA      = "\033[90m"
+WHITESA     = "\033[37m"
+B_CYANSA    = BOLDSA + CYANSA
+BLUESA      = "\033[34m"
+RED         = "\033[31m"
+BLS         = "\033[0m"
+BL          = RED + BOLDSA
+GREEN       = "\033[32m"
+B_GREEN     = BOLDSA + GREEN
+Ws = BOLDSA + WHITESA
+eds  = "{F4LL3vN}"
+vers = "0.0.4#bug"
+versti = f"{WHITESA}{'{' + B_YELLOWSA}{vers}{WHITESA + '}' + B_YELLOWSA}"
+
 session = requests.Session()
 
+LEGACY_ALIASES = {
+    "-sx": "scanx",
+    "--scanx": "scanx",
+    "-st": "scanti",
+    "--scanti": "scanti",
+    "-sq": "scansql",
+    "--scansql": "scansql",
+}
+
+# Progress bar punya lo
+def print_progress_bar(progress, end):
+    print("[{0}{1}] {2}%".format("█" * progress, "-" * (end - progress), progress), end="\r")
+    if progress == end:
+        print()
+
+def normalize_legacy_flags(argv):
+    if len(argv) > 1 and argv[1] in LEGACY_ALIASES:
+        argv[1] = LEGACY_ALIASES[argv[1]]
+    return argv
 
 def ayo(symbol, message):
     now = datetime.now()
@@ -20,6 +61,12 @@ def ayo(symbol, message):
     date_str = now.strftime("%Y-%m-%d")
     sym = col.get_symbol(symbol)
     print(f"{sym} {message} @ {time_str} /{date_str}/")
+def ayok(symbol, message):
+    now = datetime.now()
+    time_str = now.strftime("%H:%M:%S")
+    date_str = now.strftime("%Y-%m-%d")
+    sym = col.get_symbol(symbol)
+    print(f"[{BLUESA}{time_str}{RESETSA}] [{sym}] {message}")
 
 def test_payload_with_browser(url):
     alert_triggered = False
@@ -27,44 +74,68 @@ def test_payload_with_browser(url):
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-
             def handle_dialog(dialog):
                 nonlocal alert_triggered
                 alert_triggered = True
                 dialog.dismiss()
-
             page.on("dialog", handle_dialog)
-            page.goto(url, timeout=7000)
+            page.goto(url, timeout=7000, wait_until="networkidle")
             page.wait_for_timeout(1500)
             browser.close()
     except Exception:
         pass
     return alert_triggered
 
+def get_baseline(parsed, param, params, timeout=8):
+    baseline_params = params.copy()
+    baseline_params[param] = "dvulishere"
+    new_query = urlencode(baseline_params, doseq=True, quote_via=quote)
+    baseline_url = urlunparse(parsed._replace(query=new_query))
+    try:
+        response = session.get(baseline_url, timeout=timeout)
+        return response.text, response.status_code
+    except requests.RequestException:
+        return "", None
 
-def test_payload(parsed, param, params, payload):
+def is_meaningfully_reflected(response_text, baseline_text, payload):
+    candidates = {payload, unquote(payload)}
+    neutralised_markers = ["&lt;", "&gt;", "&quot;", "&#x3c;", "&#x3e;", "&#60;", "&#62;"]
+    dangerous_markers = ["<", "javascript:", "onerror", "onload", "onclick", "onmouseover", "svg", "script"]
+
+    for candidate in candidates:
+        if not candidate or candidate not in response_text:
+            continue
+        if candidate in baseline_text:
+            continue
+        is_dangerous = "<" in candidate or any(m in candidate.lower() for m in dangerous_markers)
+        if not is_dangerous:
+            continue
+        start = response_text.find(candidate)
+        window = response_text[max(0, start - 25):start + len(candidate) + 25]
+        if "<" not in candidate and any(marker in window for marker in neutralised_markers):
+            continue
+        return True
+    return False
+
+def test_payload(parsed, param, params, payload, baseline_text, timeout=8):
     test_params = params.copy()
     test_params[param] = payload
     new_query = urlencode(test_params, doseq=True, quote_via=quote)
     test_url = urlunparse(parsed._replace(query=new_query))
-
     try:
-        response = session.get(test_url, timeout=5)
-        if payload in response.text or unquote(payload) in response.text:
-            executed = test_payload_with_browser(test_url)
-            if executed:
-                return ("executed", param, payload)
-            else:
-                return ("reflected", param, payload)
-        else:
-            return (False, param, payload)
+        response = session.get(test_url, timeout=timeout)
     except requests.RequestException as e:
         return (None, param, str(e))
+    if not is_meaningfully_reflected(response.text, baseline_text, payload):
+        return (False, param, payload)
+    executed = test_payload_with_browser(test_url)
+    if executed:
+        return ("executed", param, payload)
+    return ("reflected", param, payload)
 
-
-def scanXSS(url, scan_type="all", threads=10):
+def scanXSS(url, scan_type="all", threads=10, timeout=8, no_ref=False, progress_bar=False):
     print()
-    ayo("*", f"Starting scanning: {url}")
+    ayok("INFO", f"Starting scanning: {url}")
     print()
 
     if scan_type == "all":
@@ -77,73 +148,100 @@ def scanXSS(url, scan_type="all", threads=10):
             print()
             return
 
-    ayo("*", f"Type: {scan_type} | Payloads: {len(payloads)} | Threads: {threads}")
+    ayok(f"{B_GREEN}INFO", f"Type: {scan_type} ~ {len(payloads)}/{threads}")
     print()
 
     parsed = urlparse(url)
     params = parse_qs(parsed.query)
 
     if not params:
-        ayo("!", "No parameter found in URL")
+        ayok("!", "No parameter found in URL")
         print()
         return
 
-    ayo("+", f"Parameter found: {', '.join(params.keys())}")
+    ayok("INFO", f"{Ws}Parameter found: {', '.join(params.keys())}{RESETSA}")
     print()
 
     vulnerable_executed = []
     vulnerable_reflected = []
+    errors = []
 
     for param in params:
-        ayo("*", f"Testing parameter: {param}")
+        ayok("INFO", f"Testing parameter: {param}")
         print()
 
-        print(f'[+] Scanning ({len(payloads)} payloads)')
-        print()
-        found = False
-        futures = {}
+        baseline_text, baseline_status = get_baseline(parsed, param, params, timeout)
+        if baseline_status is None:
+            ayok("!", f"Could not fetch baseline for '{param}', accuracy may be reduced")
+            print()
+        if progress_bar:
+            print("Payload progress...")
+            total = len(payloads)
+            completed = 0
+            lock = Lock()
+
+            def update_progress():
+                nonlocal completed
+                with lock:
+                    completed += 1
+                    percent = int(completed / total * 100)
+                    print_progress_bar(percent, 100)
 
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            for payload in payloads:
-                future = executor.submit(test_payload, parsed, param, params, payload)
-                futures[future] = payload 
+            futures = {
+                executor.submit(test_payload, parsed, param, params, payload, baseline_text, timeout): payload
+                for payload in payloads
+            }
 
             for future in as_completed(futures):
                 result, p, payload_or_err = future.result()
-                found = False
-                futures = {}
 
+                if progress_bar:
+                    update_progress()
 
                 if result == "executed":
-                    ayo("*", f"[EXE] Alert triggered! Payload: {payload_or_err}")
-                    print()
+                    if not progress_bar:
+                        ayok("*", f"{BL}[EXE]{RESETSA} {Ws}Alert triggered! {payload_or_err}{RESETSA}")
                     vulnerable_executed.append((p, payload_or_err))
-                    found = True
-
                 elif result == "reflected":
-                    ayo("!", f"[REF] Payload reflected but not executed: {payload_or_err}")
-                    print()
-                    vulnerable_reflected.append((p, payload_or_err))
+                    if not no_ref:
+                        if not progress_bar:
+                            ayok("!", f"{B_YELLOWSA}[REF]{RESETSA} Reflected, not executed {payload_or_err}{RESETSA}")
+                        vulnerable_reflected.append((p, payload_or_err))
 
-                # elif result is None:
-                #     ayo("!", f"Error on [{p}]: {payload_or_err}")
+                elif result is None:
+                    errors.append((p, payload_or_err))
 
+        # Akhiri progress bar kalau ada
+        if progress_bar:
+            print()
+        print()  
     print()
-    print("------ github@0whynaru ------")
+    print("ARIGATOU GOZAIMASU! >_<")
+    print("------( github@0whynaru )------")
     print()
 
     if vulnerable_executed:
+        seen = set()
         ayo("VULN", f"{len(vulnerable_executed)} parameter EXECUTED (XSS confirmed):")
         print()
         for p, payload in vulnerable_executed:
-            print(f"  [EXECUTED] {p} => {payload}")
+            key = (p, payload)
+            if key in seen:
+                continue
+            seen.add(key)
+            print(f"  {BL}[EXEC]{RESETSA} {payload}")
         print()
 
     if vulnerable_reflected:
         ayo("WARN", f"{len(vulnerable_reflected)} parameter REFLECTED (not executed):")
         print()
         for p, payload in vulnerable_reflected:
-            print(f"  [REFLECTED] {p} => {payload}")
+            print(f"  {B_YELLOWSA}[REF]{RESETSA} {payload}")
+        print()
+
+    if errors:
+        ayo("!", f"{len(errors)} requests failed (timeouts/connection errors) - results may be incomplete")
         print()
 
     if not vulnerable_executed and not vulnerable_reflected:
@@ -151,63 +249,31 @@ def scanXSS(url, scan_type="all", threads=10):
         print()
 
 def whatNew():
-    print("""
-a
+    print(f"""
+dVUL version is {vers}.
++ Fixed legacy -sx/-st/-sq flags being misread as invalid by argparse
++ Added -nr/--no-ref to hide REFLECTED (non-executed) results
++ Baseline-diff reflection check (fewer false positives)
++ Fixed thread-pool bug that could drop/duplicate results
++ Fixed SSTI Scan
++ Added optional progress bar (-p/--progress) during scanning
+
+This tools is only mini-project for beginner programmer like me
 """)
+
 def title():
-    print(r"""
-     ___   ___   _ _    
-  __| \ \ / / | | | |  {0.0.3#beta}
- / _` |\ V /| |_| | | 
- \__,_| \_/  \___/| |__
-            > ... |____|
-    """)
-
-
-def ver():
-    print("version:", vers)
-    print()
-
-
-def help():
-    print("""
-Usage: dvul [options] [target]
-
- Options:
-  -h, --help            Show help message
-  -sh, --shelp          Show scan help message
-  -v, --version         Show version
-
-  Scan:
-    -sx, --scanx  <url>         Scan XSS on target URL
-    --type      <type>          Payload type (default: all)
-                                reflected, stored, dom, bypass,
-                                filtered, dombased, polyglot,
-                                blind, all
-    --threads   <number>        Number of threads (default: 10)
-    -st, --scanti <url>         Scan SSTI on target URL
-    --engine    <engine>        Template engine (default: all)
-                                jinja2, twig, freemarker, smarty,
-                                mako, erb, velocity, thymeleaf,
-                                tornado, nunjucks, polyglot, all
-    -sq, --scansql              Scan SQL Injection on targets (coming soon)
-""")
-
-
-def shelp():
-    print("""
-    SSTI Scanner - Server-Side Template Injection
-     Usage:
-        dvul -st "http://target.com/page?id=1"
-        dvul -st "http://target.com/page?id=1" --engine jinja2
-
-    XSS Scanner  - Cross-Site Scripting
-     Usage:
-        dvul -sx "http://target.com/page?id=1"
-        dvul -sx "http://target.com/page?id=1" --type reflected
-        dvul -sx "http://target.com/page?id=1" --threads 20
-""")
-
+    print(rf"""{B_YELLOWSA}
+         
+        {BL} |{B_YELLOWSA}
+        {BL} |{B_YELLOWSA}
+      {BL}___H___{B_YELLOWSA}
+   ___  {BL}|{B_YELLOWSAA}{B_YELLOWSA}|{BLS}{BL}|{B_YELLOWSA}  ___   _ _    
+  __| \ {BL}|{B_YELLOWSAA}{B_YELLOWSA}|{BLS}{BL}|{B_YELLOWSA}/ / | | | |   {versti}
+ / _` | V V /| |_| | |     {eds}
+ \__,_| \_/   \____/ |__ 
+        {BL}\{B_YELLOWSAA}{B_YELLOWSA}|{BLS}{BL}/{B_YELLOWSA}        |____|    
+         {BL}V
+{RESETSA}""")
 
 def disclaimer():
     print()
@@ -216,91 +282,146 @@ def disclaimer():
           "Developers assume no liability and are not responsible for any misuse or damage caused by this program")
     print()
 
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="dvul",
+        description="dVUL - small web vulnerability scanner",
+        add_help=False,
+    )
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument("-sh", "--shelp", action="store_true")
+    parser.add_argument("-v", "--version", action="store_true")
+    parser.add_argument("-t", "--title", action="store_true")
+    parser.add_argument("-w", "--whatsnew", action="store_true")
 
-arguments = sys.argv[1:]
+    sub = parser.add_subparsers(dest="command")
 
-if len(arguments) == 0:
-    title()
-    help()
-    sys.exit()
+    # XSS scanner
+    sx = sub.add_parser("scanx", add_help=False)
+    sx.add_argument("target")
+    sx.add_argument("--type", default="all")
+    sx.add_argument("--threads", type=int, default=10)
+    sx.add_argument("--timeout", type=int, default=8)
+    sx.add_argument("-nr", "--no-ref", dest="no_ref", action="store_true")
+    sx.add_argument("-p", "--progress", action="store_true",
+                    help="Show progress bar instead of real-time findings")
 
-argument = arguments[0]
+    # SSTI scanner
+    st = sub.add_parser("scanti", add_help=False)
+    st.add_argument("target")
+    st.add_argument("--engine", default="all")
+    st.add_argument("--threads", type=int, default=10)
+    # optional progress bar untuk SSTI bisa ditambah nanti kalau mau
 
-if argument in ('-h', '--help'):
-    title()
-    time.sleep(0.3)
-    help()
+    # SQLi placeholder
+    sub.add_parser("scansql", add_help=False)
 
-elif argument in ('-sh', '--shelp'):
-    shelp()
+    return parser
 
-elif argument in ('-t', '--title'):
-    title()
+def help_text():
+    print("""
+Usage: dvul [options] [command]
 
-elif argument in ('-v', '--version'):
-    ver()
+ Options:
+  -h, --help            Show help message
+  -sh, --shelp          Show scan help message
+  -v, --version         Show version
+  -w, --whatsnew        Show changelog
 
-elif argument in ('-sx', '--scanx'):
-    if len(arguments) < 2:
+ Commands:
+  scanx <url>            Scan XSS on target URL
+    --type    <type>     Payload type (default: all)
+                          reflected, stored, dom, bypass,
+                          filtered, dombased, polyglot,
+                          blind, all
+    --threads <number>   Number of threads (default: 10)
+    --timeout <seconds>  Per-request timeout (default: 8)
+    -nr, --no-ref        Hide REFLECTED (non-executed) results
+    -p, --progress       Use progress bar (findings shown at end)
+
+  scanti <url>            Scan SSTI on target URL
+    --engine  <engine>   Template engine (default: all)
+                          jinja2, twig, freemarker, smarty,
+                          mako, erb, velocity, thymeleaf,
+                          tornado, nunjucks, polyglot, all
+    --threads <number>   Number of threads (default: 10)
+
+  scansql                 Scan SQL Injection on targets (coming soon)
+
+ (legacy flags -sx/-st/-sq still work as aliases for scanx/scanti/scansql)
+""")
+
+def shelp_text():
+    print("""
+    SSTI Scanner - Server-Side Template Injection
+     Usage:
+        dvul scanti "http://target.com/page?id=1"
+        dvul scanti "http://target.com/page?id=1" --engine jinja2
+
+    XSS Scanner  - Cross-Site Scripting
+     Usage:
+        dvul scanx "http://target.com/page?id=1"
+        dvul scanx "http://target.com/page?id=1" --type reflected
+        dvul scanx "http://target.com/page?id=1" --threads 20
+        dvul scanx "http://target.com/page?id=1" -nr
+        dvul scanx "http://target.com/page?id=1" -p   # progress bar mode
+""")
+
+def main():
+    sys.argv = normalize_legacy_flags(sys.argv)
+    parser = build_parser()
+
+    if len(sys.argv) == 1:
+        title()
+        help_text()
+        sys.exit()
+
+    args, unknown = parser.parse_known_args()
+
+    if args.help:
+        title()
+        time.sleep(0.3)
+        help_text()
+        return
+
+    if args.shelp:
+        shelp_text()
+        return
+
+    if args.version:
+        print("version:", vers)
         print()
-        print("ERROR: Invalid target URL.")
-        print("Make sure your command is correct: dvul -sx 'http://target.com/page?id=1'")
-        print()
-        sys.exit(1)
+        return
 
-    target_url = arguments[1]
+    if args.title:
+        title()
+        return
 
-    scan_type = "all"
-    if "--type" in arguments:
-        type_index = arguments.index("--type")
-        if type_index + 1 < len(arguments):
-            scan_type = arguments[type_index + 1]
+    if args.whatsnew:
+        whatNew()
+        return
 
-    threads = 10
-    if "--threads" in arguments:
-        thread_index = arguments.index("--threads")
-        if thread_index + 1 < len(arguments):
-            try:
-                threads = int(arguments[thread_index + 1])
-            except ValueError:
-                ayo("!", "Invalid thread count, using default: 10")
+    if args.command == "scanx":
+        title()
+        time.sleep(0.3)
+        disclaimer()
+        scanXSS(args.target, args.type, args.threads, args.timeout, args.no_ref, args.progress)
+        return
 
-    title()
-    time.sleep(0.3)
-    disclaimer()
-    scanXSS(target_url, scan_type, threads)
+    if args.command == "scanti":
+        title()
+        time.sleep(0.3)
+        disclaimer()
+        ssti.scanSSTI(args.target, args.engine, args.threads)
+        return
 
-elif argument in ('-st', '--scanti'):
-    if len(arguments) < 2:
-        print()
-        print("ERROR: Invalid target URL.")
-        print("Make sure your command is correct: dvul -st 'http://target.com/page?id=1'")
-        print()
-        sys.exit(1)
-
-    target_url = arguments[1]
-
-    engine = "all"
-    if "--engine" in arguments:
-        engine_index = arguments.index("--engine")
-        if engine_index + 1 < len(arguments):
-            engine = arguments[engine_index + 1]
-
-    threads = 10
-    if "--threads" in arguments:
-        thread_index = arguments.index("--threads")
-        if thread_index + 1 < len(arguments):
-            try:
-                threads = int(arguments[thread_index + 1])
-            except ValueError:
-                ayo("!", "Invalid thread count, using default: 10")
+    if args.command == "scansql":
+        ayo("!", "SQLi scan is not implemented yet")
+        return
 
     title()
-    time.sleep(0.3)
-    disclaimer()
-    ssti.scanSSTI(target_url, engine, threads)
-
-else:
-    title()
-    help()
+    help_text()
     sys.exit(1)
+
+if __name__ == "__main__":
+    main()
