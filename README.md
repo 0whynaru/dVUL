@@ -1,4 +1,5 @@
-# dVUL is Scanner for CTF Beginner.
+# dVUL: CTF XSS Tools
+dVUL is a CTF Tools and simple bug bounty tools. this is made for only Happines.
 I make this to help anyone where want to win on CTF Competition and Challenge.
 
 > A lightweight web vulnerability scanner focused on XSS detection - built for Bug Bounty hunters and CTF players.
