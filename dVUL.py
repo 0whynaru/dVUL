@@ -10,10 +10,10 @@ from playwright.sync_api import sync_playwright
 import payloads.xss as xss_payloads
 import things.tolStp as ssti
 import things.colorians as col
+from fake_useragent import UserAgent
 
 # ANSI colors
 BOLDSA      = "\033[1m"
-
 YELLOWSA    = "\033[33m"
 B_YELLOWSA  = BOLDSA + YELLOWSA
 B_YELLOWSAA = "\033[41m"
@@ -28,12 +28,21 @@ BLS         = "\033[0m"
 BL          = RED + BOLDSA
 GREEN       = "\033[32m"
 B_GREEN     = BOLDSA + GREEN
-Ws = BOLDSA + WHITESA
-eds  = "{F4LL3vN}"
-vers = "0.0.4#bug"
-versti = f"{WHITESA}{'{' + B_YELLOWSA}{vers}{WHITESA + '}' + B_YELLOWSA}"
+Ws          = BOLDSA + WHITESA
+eds         = "{F4LL3vN}"
+vers        = "0.0.4#bug"
+versti      = f"{WHITESA}{'{' + B_YELLOWSA}{vers}{WHITESA + '}' + B_YELLOWSA}"
 
+ua = UserAgent(fallback="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 session = requests.Session()
+
+def get_randomHeader():
+    return {
+        "User-Agent": ua.random,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Connection": "keep-alive",
+    }
 
 LEGACY_ALIASES = {
     "-sx": "scanx",
@@ -43,12 +52,6 @@ LEGACY_ALIASES = {
     "-sq": "scansql",
     "--scansql": "scansql",
 }
-
-# Progress bar punya lo
-def print_progress_bar(progress, end):
-    print("[{0}{1}] {2}%".format("█" * progress, "-" * (end - progress), progress), end="\r")
-    if progress == end:
-        print()
 
 def normalize_legacy_flags(argv):
     if len(argv) > 1 and argv[1] in LEGACY_ALIASES:
@@ -61,6 +64,7 @@ def ayo(symbol, message):
     date_str = now.strftime("%Y-%m-%d")
     sym = col.get_symbol(symbol)
     print(f"{sym} {message} @ {time_str} /{date_str}/")
+
 def ayok(symbol, message):
     now = datetime.now()
     time_str = now.strftime("%H:%M:%S")
@@ -92,7 +96,7 @@ def get_baseline(parsed, param, params, timeout=8):
     new_query = urlencode(baseline_params, doseq=True, quote_via=quote)
     baseline_url = urlunparse(parsed._replace(query=new_query))
     try:
-        response = session.get(baseline_url, timeout=timeout)
+        response = session.get(baseline_url, headers=get_randomHeader(), timeout=timeout)
         return response.text, response.status_code
     except requests.RequestException:
         return "", None
@@ -123,7 +127,7 @@ def test_payload(parsed, param, params, payload, baseline_text, timeout=8):
     new_query = urlencode(test_params, doseq=True, quote_via=quote)
     test_url = urlunparse(parsed._replace(query=new_query))
     try:
-        response = session.get(test_url, timeout=timeout)
+        response = session.get(test_url, headers=get_randomHeader(), timeout=timeout)
     except requests.RequestException as e:
         return (None, param, str(e))
     if not is_meaningfully_reflected(response.text, baseline_text, payload):
@@ -175,17 +179,23 @@ def scanXSS(url, scan_type="all", threads=10, timeout=8, no_ref=False, progress_
             ayok("!", f"Could not fetch baseline for '{param}', accuracy may be reduced")
             print()
         if progress_bar:
-            print("Payload progress...")
             total = len(payloads)
             completed = 0
             lock = Lock()
+            dot_index = 0
 
             def update_progress():
-                nonlocal completed
+                nonlocal completed, dot_index
                 with lock:
                     completed += 1
+                    dot_index = (dot_index % 3) + 1
+                    dots = "." * dot_index
                     percent = int(completed / total * 100)
-                    print_progress_bar(percent, 100)
+                    filled = int(percent / 2)
+                    bar = f"{WHITESA}{'█' * filled}{GREYSA}{'░' * (50 - filled)}{RESETSA}"
+                    print(f"\rPayload progress{dots:<4} [{bar}] {WHITESA}{percent}%{RESETSA}  ", end="", flush=True)
+                    if completed == total:
+                        print()
 
         with ThreadPoolExecutor(max_workers=threads) as executor:
             futures = {
@@ -208,14 +218,13 @@ def scanXSS(url, scan_type="all", threads=10, timeout=8, no_ref=False, progress_
                         if not progress_bar:
                             ayok("!", f"{B_YELLOWSA}[REF]{RESETSA} Reflected, not executed {payload_or_err}{RESETSA}")
                         vulnerable_reflected.append((p, payload_or_err))
-
                 elif result is None:
                     errors.append((p, payload_or_err))
 
-        # Akhiri progress bar kalau ada
         if progress_bar:
             print()
-        print()  
+        print()
+
     print()
     print("ARIGATOU GOZAIMASU! >_<")
     print("------( github@0whynaru )------")
@@ -296,7 +305,6 @@ def build_parser():
 
     sub = parser.add_subparsers(dest="command")
 
-    # XSS scanner
     sx = sub.add_parser("scanx", add_help=False)
     sx.add_argument("target")
     sx.add_argument("--type", default="all")
@@ -306,14 +314,11 @@ def build_parser():
     sx.add_argument("-p", "--progress", action="store_true",
                     help="Show progress bar instead of real-time findings")
 
-    # SSTI scanner
     st = sub.add_parser("scanti", add_help=False)
     st.add_argument("target")
     st.add_argument("--engine", default="all")
     st.add_argument("--threads", type=int, default=10)
-    # optional progress bar untuk SSTI bisa ditambah nanti kalau mau
 
-    # SQLi placeholder
     sub.add_parser("scansql", add_help=False)
 
     return parser
